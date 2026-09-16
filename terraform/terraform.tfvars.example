@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars for local runs (it's gitignored) and adjust as needed.
+# In CI, these are instead passed via -var / GitHub Actions variables.
+
+location             = "eastus"
+resource_group_name  = "rg-aks-homelab"
+cluster_name         = "aks-homelab"
+dns_prefix           = "akshomelab"
+node_count           = 1
+vm_size              = "Standard_B2s"
+sku_tier             = "Free"
+
+# Object ID(s) of Azure AD group(s) that should get cluster-admin via Azure RBAC.
+# Leave empty and assign roles manually if you don't have a group set up yet.
+admin_group_object_ids = []
