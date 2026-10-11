@@ -64,9 +64,10 @@ jobs:
       stack: ${{ matrix.stack }}
       working-directory: terraform/stack/${{ matrix.stack }}
       var-file: terraform/env/${{ matrix.stack }}.tfvars
-      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
-      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
-      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   # Matrix job outputs overwrite each other, so the stacks to apply are read from
   # which plan artifacts exist (the plan workflow only uploads one when there are changes).
@@ -110,6 +111,7 @@ jobs:
       stack: ${{ matrix.stack }}
       working-directory: terraform/stack/${{ matrix.stack }}
       environment: test
-      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
-      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
-      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
