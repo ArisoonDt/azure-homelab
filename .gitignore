@@ -4,6 +4,8 @@
 *.tfstate.*
 *.tfvars
 !terraform.tfvars.example
+# Per-stack inputs consumed by the pipeline; must not contain secrets.
+!terraform/env/*.tfvars
 *.tfplan
 tfplan
 crash.log

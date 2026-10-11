@@ -1,0 +1,115 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/stack/**"
+      - "terraform/env/**"
+      - ".github/workflows/terraform.yml"
+      - ".pre-commit-config.yaml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/stack/**"
+      - "terraform/env/**"
+      - ".github/workflows/terraform.yml"
+      - ".pre-commit-config.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect changed stacks
+    runs-on: ubuntu-latest
+    outputs:
+      stacks: ${{ steps.detect.outputs.stacks }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect
+        id: detect
+        uses: ArisoonDt/my-workflows/.github/actions/detect-changed-stacks@v1
+        with:
+          run-all-paths: .github/workflows/terraform.yml
+
+  # Same hooks as local commits (.pre-commit-config.yaml): terraform fmt + validate.
+  pre-commit:
+    name: pre-commit
+    uses: ArisoonDt/my-workflows/.github/workflows/pre-commit.yml@v1
+
+  plan:
+    name: Plan (${{ matrix.stack }})
+    needs: [detect, pre-commit]
+    if: needs.detect.outputs.stacks != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: ${{ fromJSON(needs.detect.outputs.stacks) }}
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    uses: ArisoonDt/my-workflows/.github/workflows/terraform-plan.yml@v1
+    with:
+      stack: ${{ matrix.stack }}
+      working-directory: terraform/stack/${{ matrix.stack }}
+      var-file: terraform/env/${{ matrix.stack }}.tfvars
+      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+  # Matrix job outputs overwrite each other, so the stacks to apply are read from
+  # which plan artifacts exist (the plan workflow only uploads one when there are changes).
+  collect:
+    name: Collect stacks to apply
+    needs: plan
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      stacks: ${{ steps.collect.outputs.stacks }}
+    steps:
+      - name: Collect
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACTS_URL: repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?per_page=100
+        run: |
+          json=$(gh api "$ARTIFACTS_URL" \
+            --jq '[.artifacts[].name | select(startswith("tfplan-")) | ltrimstr("tfplan-")]')
+          echo "Stacks to apply: $json"
+          echo "stacks=$json" >> "$GITHUB_OUTPUT"
+
+  apply:
+    name: Apply (${{ matrix.stack }})
+    needs: collect
+    if: needs.collect.outputs.stacks != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        stack: ${{ fromJSON(needs.collect.outputs.stacks) }}
+    permissions:
+      id-token: write
+      contents: read
+    uses: ArisoonDt/my-workflows/.github/workflows/terraform-apply.yml@v1
+    with:
+      stack: ${{ matrix.stack }}
+      working-directory: terraform/stack/${{ matrix.stack }}
+      environment: test
+      azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+      azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+      azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
